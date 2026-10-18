@@ -432,7 +432,7 @@ body.intro-lock{ overflow:hidden; }
       </div>
     </div>
 
-    <div class="stats-title"><h2>Accuracy</h2><span>Live for this session</span></div>
+    <div class="stats-title"><h2>Accuracy</h2><span>Live across all visitors</span></div>
     <div class="stats">
       <div class="card stat"><div class="ic ic-t"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg></div><div class="k">Total asked</div><div class="v" id="s-total">0</div></div>
       <div class="card stat"><div class="ic ic-g"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><div class="k">Right</div><div class="v" id="s-correct">0</div></div>
@@ -555,6 +555,21 @@ function sbParams(filters){
     if (f.key==='qt'){ const b = qtBounds(f.val); p.p_from = b.from; p.p_to = b.to; }
   }
   return p;
+}
+let sbCounts = null;
+async function loadCounts(){
+  try { sbCounts = await rpc('accuracy_counts', {}); renderStats(); } catch (e) {}
+}
+async function recordStat(status){
+  if (!(await sbReady)) return;
+  try {
+    await fetch(`${SB.url}/rest/v1/answer_stats`, {
+      method: 'POST',
+      headers: { apikey: SB.key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status })
+    });
+    await loadCounts();
+  } catch (e) {}
 }
 function setSrc(text, live){
   const el = document.getElementById('srcTop'); if (!el) return;
@@ -927,6 +942,8 @@ function renderExportTable(){
     : 'Showing all rows in this scope.';
 }
 
+sbReady.then(ok => { if (ok) loadCounts(); });
+
 /* ---------- Answers from Supabase (built-in data is the fallback) ---------- */
 async function enrichWithSupabase(e){
   const p = e.res.plan;
@@ -997,6 +1014,7 @@ function submitReport(){
   if (!txt){ $('#rerr').textContent = 'Please describe what was wrong.'; return; }
   const e = reportTarget;
   e.status = 'wrong'; e.reported = true; e.note = txt;
+  recordStat('reported');
   const subject = 'AI Chat Assistant: answer review request';
   const body = `Hi,\n\nQuestions : ${e.q}\nAns: ${e.res.text}\n\nQuery:\n${e.res.query || '-'}\n\nWhat was wrong: ${txt}\n\nThanks`;
   renderAll();
@@ -1046,6 +1064,17 @@ function renderThread(){
   thread.lastElementChild && thread.lastElementChild.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 function renderStats(){
+  if (sbCounts){
+    $('#s-total').textContent = sbCounts.total;
+    $('#s-correct').textContent = sbCounts.right;
+    $('#s-wrong').textContent = sbCounts.wrong;
+    $('#s-irr').textContent = sbCounts.irrelevant;
+    const a = sbCounts.accuracy;
+    $('#s-acc').textContent = a == null ? '—' : a + '%';
+    $('#s-acc2').textContent = a == null ? '—' : a + '%';
+    $('#ring').style.strokeDashoffset = 175.93 * (1 - (a || 0) / 100);
+    return;
+  }
   const total = entries.filter(e => e.status !== 'clarify').length;
   const correct = entries.filter(e => e.status==='correct' && !e.reported).length;
   const wrong = entries.filter(e => e.status==='wrong').length;
@@ -1065,6 +1094,7 @@ function ask(text){
   const entry = {id: ++seq, q, res, status: res.status};
   entries.push(entry);
   enrichWithSupabase(entry);
+  if (entry.status !== 'clarify') recordStat(entry.status);
   input.value = '';
   showView('home');
   renderAll();
