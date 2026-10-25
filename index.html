@@ -843,6 +843,8 @@ function run0(q){
     let text;
     if (chrono_) text = `${cap} by ${FIELDS[group].toLowerCase()}${scopeTxt(filters)}.`;
     else if (topN) text = `${asc ? 'Bottom' : 'Top'} ${items.length} ${PLURAL[group]} by ${label}${scopeTxt(filters)}.`;
+    else if (!/which|highest|lowest|best|worst|most|least/.test(t) && items.length <= 6)
+      text = `${cap} by ${FIELDS[group].toLowerCase()}${scopeTxt(filters)}: ${items.map(x => `${x.name} ${fmt(mk, x.val)}`).join(', ')}.`;
     else text = `${FIELDS[group]} with the ${asc ? 'lowest' : 'highest'} ${label} is ${items[0].name} at ${fmt(mk, items[0].val)}${scopeTxt(filters)}.`;
     return {status:'correct', text,
       query: sqlQ({metric:mk, filters, group, orderBy: chrono_ ? `${GA[group]} ASC` : `${MET[mk].alias} ${asc ? 'ASC' : 'DESC'}`, limit: topN ? +topN : (chrono_ ? null : 10)}),
@@ -953,6 +955,7 @@ async function enrichWithSupabase(e){
     const params = sbParams(p.filters);
     if (p.kind === 'scalar'){
       const v = await rpc('metric_value', {p_metric: METRIC_SQL[p.metric], ...params});
+      if (!isFinite(+v)) throw new Error('bad value');
       e.res = {...e.res, text: `${MET[p.metric].title}${scopeTxt(p.filters)} is ${fmt(p.metric, +v)}.`, source: 'Supabase'};
     } else if (p.kind === 'group'){
       const limit = p.topN ? +p.topN : ((p.group==='y' || p.group==='qt') ? 40 : 10);
@@ -967,6 +970,8 @@ async function enrichWithSupabase(e){
       if (!items.length) text = 'No orders match that question.';
       else if (chrono_) text = `${cap} by ${FIELDS[p.group].toLowerCase()}${scopeTxt(p.filters)}.`;
       else if (p.topN) text = `${p.asc ? 'Bottom' : 'Top'} ${items.length} ${PLURAL[p.group]} by ${label}${scopeTxt(p.filters)}.`;
+      else if (!/which|highest|lowest|best|worst|most|least/.test(e.q.toLowerCase()) && items.length <= 6)
+        text = `${cap} by ${FIELDS[p.group].toLowerCase()}${scopeTxt(p.filters)}: ${items.map(x => `${x.name} ${fmt(p.metric, x.val)}`).join(', ')}.`;
       else text = `${FIELDS[p.group]} with the ${p.asc ? 'lowest' : 'highest'} ${label} is ${items[0].name} at ${fmt(p.metric, items[0].val)}${scopeTxt(p.filters)}.`;
       e.res = {...e.res, text, source: 'Supabase',
         table: items.length ? {head:[FIELDS[p.group], cap], rows: items.map(x => [x.name, fmt(p.metric, x.val)])} : null};
@@ -1009,12 +1014,28 @@ function openReport(e){
 function mailUrl(subject, body){ return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; }
 function setDraft(boxId, linkId, subject, body){ $('#'+boxId).value = body; $('#'+linkId).href = mailUrl(subject, body); }
 function copyDraft(boxId){ const ta = $('#'+boxId); ta.select(); try { document.execCommand('copy'); } catch(e) {} }
+async function saveReport(e, note){
+  if (!(await sbReady)) return;
+  try {
+    await fetch(`${SB.url}/rest/v1/answer_reports`, {
+      method: 'POST',
+      headers: { apikey: SB.key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        question: (e.q || '').slice(0, 500),
+        answer: (e.res.text || '').slice(0, 2000),
+        sql_query: (e.res.query || '').slice(0, 2000) || null,
+        note: note
+      })
+    });
+  } catch (err) {}
+}
 function submitReport(){
   const txt = $('#rtext').value.trim();
   if (!txt){ $('#rerr').textContent = 'Please describe what was wrong.'; return; }
   const e = reportTarget;
   e.status = 'wrong'; e.reported = true; e.note = txt;
   recordStat('reported');
+  saveReport(e, txt.slice(0, 2000));
   const subject = 'AI Chat Assistant: answer review request';
   const body = `Hi,\n\nQuestions : ${e.q}\nAns: ${e.res.text}\n\nQuery:\n${e.res.query || '-'}\n\nWhat was wrong: ${txt}\n\nThanks`;
   renderAll();
