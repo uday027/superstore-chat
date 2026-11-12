@@ -1,6 +1,6 @@
 # Superstore Sales: Power BI Dashboard and AI Chat
 
-An end-to-end analytics project: a Power BI report on a Superstore sales dataset, a Supabase database with read-only access, and a chat page that answers questions from that database and shows the SQL behind every answer.
+An end-to-end analytics project: a Power BI report on a Superstore sales dataset, a Supabase database with read-only access, and a chat page that answers questions from that data and shows the SQL behind every answer. The project also tracks answer accuracy, sends an AI monitoring summary of any answers marked wrong, and uses Power Automate to deliver daily updates.
 
 **Live chat:** https://uday027.github.io/superstore-chat/
 
@@ -19,18 +19,20 @@ An end-to-end analytics project: a Power BI report on a Superstore sales dataset
 ![Architecture](docs/screenshots/05-architecture.png)
 
 - **Data:** Kaggle Superstore sample, loaded into Supabase.
-- **Database:** Supabase (PostgreSQL) with Row Level Security. Visitors can only read `superstore_orders` and call read-only query functions.
-- **Chat page:** a single HTML file on GitHub Pages. It calls Supabase with the public (anon) key.
+- **Database:** Supabase (PostgreSQL) with Row Level Security. Visitors have read-only access.
+- **Chat page:** built with an AI artifact and hosted on GitHub Pages. It answers questions from Supabase and shows the SQL for each answer.
+- **Accuracy tracking:** each answer is counted as right, wrong, or off-topic, and the totals appear on the page.
+- **AI monitoring:** a daily summary of any answer marked wrong, including the question, the answer given, and the visitor's explanation.
 - **Dashboard:** Power BI Desktop, imported from Supabase data.
-- **Automation:** a Power Automate flow sends the previous day's raw data every morning.
+- **Automation:** a Power Automate flow sends the previous day's raw data every morning at 9:00 AM.
 
 ## What it does
 
 - **Executive Overview:** total sales, profit, margin, orders, quantity, sales by region and category.
 - **Sales Trends:** quarterly sales and profit, margin over time, seasonality, and a year-by-year performance table with sparklines, progress bars, and growth indicators.
 - **Ask a question:** type a question in plain English. The page answers from the database and shows the SQL it ran.
-- **Report a wrong answer:** visitors can mark an answer as wrong and explain why. Reports are saved for review.
-- **Daily summary:** a scheduled flow sends the previous day's raw data every morning.
+- **Report a wrong answer:** visitors can mark an answer as wrong and explain why. The report is saved, and the AI monitoring summary sends it to the project owner.
+- **Daily updates:** Power Automate delivers the previous day's raw data every morning.
 
 ## Questions the chat answers
 
@@ -56,27 +58,24 @@ A Power Automate flow runs every morning at 9:00 AM. It runs a query on the Powe
 
 ## Security
 
-- Only the public (anon) key is in the page. It can read `superstore_orders` and add records to the accuracy and report tables. It cannot change or delete data.
+- Visitors have read-only access to the sales data. They can add records only to the accuracy and report tables.
 - Row Level Security is enabled on every table.
-- The chat uses fixed query functions. Visitors cannot send their own SQL.
+- The chat uses fixed query functions, so visitors cannot run their own SQL.
 - No customer names or IDs are included in the data.
-- Database passwords, service keys, and API secrets are not in this repository.
 
 ## Data notes
 
 - The dataset is a public Superstore sample.
 - Order dates were adjusted to 2017 to 2026 for this project, so year and quarter results differ from the original file.
-- 2026 covers January to September only.
-- Totals: sales $2,297,201.07, profit $286,397.79, 5,009 orders.
+- 2026 covers January to September.
 
 ## Limitations
 
-- The chat's answers are rule-based. It understands common phrasings, not every possible question, so it may not answer every wording correctly.
-- Free Supabase projects pause after 7 days of inactivity.
+- The chat understands common questions in plain English. For best results, try the example questions above, or phrase your question the way they're written.
 
 ## Tools
 
-Power BI Desktop, Supabase, PostgreSQL, SQL, DAX, HTML, CSS, JavaScript, GitHub Pages, Power Automate.
+Power BI Desktop, Supabase, PostgreSQL, SQL, DAX, AI artifacts, AI monitoring, GitHub Pages, Power Automate.
 
 ## Author
 
